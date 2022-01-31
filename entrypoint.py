@@ -1,7 +1,8 @@
 import time
 import datetime
+import logging
 
 
 while True:
-    print(datetime.datetime.now())
+    logging.info(f"{datetime.datetime.now()}")
     time.sleep(5)

@@ -52,7 +52,8 @@ def show_camera():
     video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
     if video_capture.isOpened():
         try:
-            window_handle = cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
+            cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
+            cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             while True:
                 ret_val, frame = video_capture.read()
                 # Check to see if the user closed the window

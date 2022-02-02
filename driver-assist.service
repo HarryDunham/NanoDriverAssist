@@ -1,0 +1,9 @@
+[Unit]
+After=network.target
+Description="Driver Assistance"
+[Service]
+ExecStart=/usr/local/bin/driver_assist.sh
+User=nano
+[Install]
+WantedBy=multi-user.target
+

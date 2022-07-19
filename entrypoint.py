@@ -8,6 +8,7 @@
 
 import cv2
 import RPi.GPIO as GPIO
+import time
 
 """ 
 gstreamer_pipeline returns a GStreamer pipeline for capturing from the CSI camera
@@ -16,8 +17,7 @@ display_width and display_height determine the size of each camera pane in the w
 Default 1920x1080 displayd in a 1/4 size window
 """
 
-# Pin Definitions
-input_pin = 7  # BCM pin 18, BOARD pin 12
+input_pin = 31
 
 def gstreamer_pipeline(
     sensor_id=0,
@@ -54,12 +54,12 @@ def show_camera():
     value_str = ""
 
     # Pin Setup:
-    GPIO.setmode(GPIO.BCM)  # BCM pin-numbering scheme from Raspberry Pi
+    GPIO.setmode(GPIO.BOARD)
     GPIO.setup(input_pin, GPIO.IN)  # set pin as an input pin
 
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     print(gstreamer_pipeline(flip_method=2))
-    video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=0), cv2.CAP_GSTREAMER)
+    video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=2), cv2.CAP_GSTREAMER)
     if video_capture.isOpened():
         try:
             cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
@@ -67,19 +67,14 @@ def show_camera():
             while True:
                 value = GPIO.input(input_pin)
                 if value != prev_value:
-                    if value == GPIO.HIGH:
-                        value_str = "HIGH"
+                    if value == 1:
+                        value_str = "ON"
                     else:
-                        value_str = "LOW"
+                        value_str = "OFF"
                     prev_value = value
                 ret_val, frame = video_capture.read()
-                # Check to see if the user closed the window
-                # Under GTK+ (Jetson Default), WND_PROP_VISIBLE does not work correctly. Under Qt it does
-                # GTK - Substitute WND_PROP_AUTOSIZE to detect if window has been closed by user
-                if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and value_str == "HIGH":
+                if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and value_str == "ON":
                     cv2.imshow(window_title, frame)
-                else:
-                    break
                 keyCode = cv2.waitKey(10) & 0xFF
                 # Stop the program on the ESC key or 'q'
                 if keyCode == 27 or keyCode == ord('q'):

@@ -17,7 +17,9 @@ display_width and display_height determine the size of each camera pane in the w
 Default 1920x1080 displayd in a 1/4 size window
 """
 
-input_pin = 31
+rearview_camera_pin = 31
+frontview_camera_pin = 13
+
 
 def gstreamer_pipeline(
     sensor_id=0,
@@ -50,30 +52,27 @@ def gstreamer_pipeline(
 def show_camera():
     window_title = "CSI Camera"
 
-    prev_value = None
-    value_str = ""
-
     # Pin Setup:
     GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(input_pin, GPIO.IN)  # set pin as an input pin
+    GPIO.setup(rearview_camera_pin, GPIO.IN)  # set pin as an input pin
 
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     print(gstreamer_pipeline(flip_method=2))
     video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=2), cv2.CAP_GSTREAMER)
     if video_capture.isOpened():
         try:
+            old_time = time.time()
+            rearview_on = GPIO.input(rearview_camera_pin)
             cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
             cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             while True:
-                value = GPIO.input(input_pin)
-                if value != prev_value:
-                    if value == 1:
-                        value_str = "ON"
-                    else:
-                        value_str = "OFF"
-                    prev_value = value
+                current_time = time.time()
+                if current_time - old_time > .5:
+                    rearview_on = GPIO.input(rearview_camera_pin)
+                    old_time = current_time
+
                 ret_val, frame = video_capture.read()
-                if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and value_str == "ON":
+                if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and rearview_on:
                     cv2.imshow(window_title, frame)
                 keyCode = cv2.waitKey(10) & 0xFF
                 # Stop the program on the ESC key or 'q'

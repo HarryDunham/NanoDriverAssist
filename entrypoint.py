@@ -55,6 +55,8 @@ def show_camera():
             rearview_on = GPIO.input(frontview_camera_pin)
             cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
             cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+            previous_camera = None
+            current_camera = None
             while True:
                 current_time = time.time()
                 if current_time - old_time > .5:
@@ -62,9 +64,17 @@ def show_camera():
                     old_time = current_time
 
                 if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and rearview_on:
+                    if current_camera != "rearview":
+                        previous_camera = current_camera
+                        current_camera = "rearview"
+                        front_video_capture.release()
                     ret_val, frame = back_video_capture.read()
                     cv2.imshow(window_title, frame)
                 else:
+                    if current_camera != "frontview":
+                        previous_camera = current_camera
+                        current_camera = "frontview"
+                        back_video_capture.release()
                     ret_val, frame = front_video_capture.read()
                     cv2.imshow(window_title, frame)
                 keyCode = cv2.waitKey(10) & 0xFF

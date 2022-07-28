@@ -1,24 +1,13 @@
 #!/usr/bin/python3
-# MIT License
-# Copyright (c) 2019-2022 JetsonHacks
-
-# Using a CSI camera (such as the Raspberry Pi Version 2) connected to a
-# NVIDIA Jetson Nano Developer Kit using OpenCV
-# Drivers for the camera and OpenCV are included in the base image
 
 import cv2
 import RPi.GPIO as GPIO
 import time
 
-""" 
-gstreamer_pipeline returns a GStreamer pipeline for capturing from the CSI camera
-Flip the image by setting the flip_method (most common values: 0 and 2)
-display_width and display_height determine the size of each camera pane in the window on the screen
-Default 1920x1080 displayd in a 1/4 size window
-"""
 
-rearview_camera_pin = 31
-frontview_camera_pin = 13
+frontview_camera_pin = 31
+left_turn_signal = 24
+right_turn_signal = 23
 
 
 def gstreamer_pipeline(
@@ -50,37 +39,42 @@ def gstreamer_pipeline(
 
 
 def show_camera():
-    window_title = "CSI Camera"
+    window_title = ""
 
     # Pin Setup:
     GPIO.setmode(GPIO.BOARD)
-    GPIO.setup(rearview_camera_pin, GPIO.IN)  # set pin as an input pin
+    GPIO.setup(frontview_camera_pin, GPIO.IN)  # set pin as an input pin
 
     # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
     print(gstreamer_pipeline(flip_method=2))
-    video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=2), cv2.CAP_GSTREAMER)
-    if video_capture.isOpened():
+    front_video_capture = cv2.VideoCapture(gstreamer_pipeline(flip_method=2), cv2.CAP_GSTREAMER)
+    back_video_capture = cv2.VideoCapture("/dev/video1")
+    if front_video_capture.isOpened() and back_video_capture.isOpened():
         try:
             old_time = time.time()
-            rearview_on = GPIO.input(rearview_camera_pin)
+            rearview_on = GPIO.input(frontview_camera_pin)
             cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
             cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
             while True:
                 current_time = time.time()
                 if current_time - old_time > .5:
-                    rearview_on = GPIO.input(rearview_camera_pin)
+                    rearview_on = GPIO.input(frontview_camera_pin)
                     old_time = current_time
 
-                ret_val, frame = video_capture.read()
                 if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and rearview_on:
+                    ret_val, frame = back_video_capture.read()
+                    cv2.imshow(window_title, frame)
+                else:
+                    ret_val, frame = front_video_capture.read()
                     cv2.imshow(window_title, frame)
                 keyCode = cv2.waitKey(10) & 0xFF
-                # Stop the program on the ESC key or 'q'
+
+                # todo remove this when installed in car
                 if keyCode == 27 or keyCode == ord('q'):
                     break
         finally:
             GPIO.cleanup()
-            video_capture.release()
+            front_video_capture.release()
             cv2.destroyAllWindows()
     else:
         print("Error: Unable to open camera")

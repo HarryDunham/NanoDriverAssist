@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-import threading
+import multiprocessing
+import logging
 
 import cv2
 import RPi.GPIO as GPIO
@@ -41,22 +42,20 @@ def gstreamer_pipeline(
     )
 
 
-class CameraThread(threading.Thread):
-    def __init__(self, *args, camera_name, **kwargs):
-        threading.Thread.__init__(self)
-        self.camera_name = camera_name
-        self.args = args
-        self.kwargs = kwargs
-
-    def run(self):
-        cv2.namedWindow(self.camera_name)
-        cam = cv2.VideoCapture(*self.args, **self.kwargs)
+# todo refactor this to process
+def spawn_camera_process(feed, camera_name, api_pref=None):
+        cv2.namedWindow(camera_name)
+        logging.warn(f"`{feed}`")
+        if api_pref is None:
+            cam = cv2.VideoCapture(feed)
+        else:
+            cam = cv2.VideoCapture(feed, api_pref)
         if cam.isOpened():  # try to get the first frame
             rval, frame = cam.read()
         else:
             rval = False
         while rval:
-            cv2.imshow(self.camera_name, frame)
+            cv2.imshow(camera_name, frame)
             rval, frame = cam.read()
 
             # todo remove this when installed in car
@@ -64,39 +63,41 @@ class CameraThread(threading.Thread):
             if keyCode == 27 or keyCode == ord('q'):
                 break
 
-        cv2.destroyWindow(self.camera_name)
+        cv2.destroyWindow(camera_name)
+
 
 
 def show_camera():
-    window_title = ""
-
     # Pin Setup:
     GPIO.setmode(GPIO.BOARD)
     GPIO.setup(frontview_camera_pin, GPIO.IN)  # set pin as an input pin
 
-    # To flip the image, modify the flip_method parameter (0 and 2 are the most common)
-    print(gstreamer_pipeline(flip_method=2))
-    frontview_camera_thread = CameraThread(gstreamer_pipeline(flip_method=2), cv2.CAP_GSTREAMER, camera_name="frontview")
-    rearview_camera_thread = CameraThread("/dev/video1", camera_name="rearview")
-    frontview_camera_thread.run()
+    logging.warning("Starting...")
+
+    frontview_camera_thread = multiprocessing.Process(target=spawn_camera_process, args=(), kwargs={"feed": gstreamer_pipeline(flip_method=2), "api_pref": cv2.CAP_GSTREAMER, "camera_name": "frontview"})
+    rearview_camera_thread = multiprocessing.Process(target=spawn_camera_process, args=(), kwargs={"feed": "/dev/video1", "camera_name": "rearview"})
     try:
         old_time = time.time()
         rearview_on = GPIO.input(frontview_camera_pin)
-        cv2.namedWindow(window_title, cv2.WINDOW_AUTOSIZE)
-        cv2.setWindowProperty(window_title, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+        logging.warning(f"REARVIEW ON `{rearview_on}`")
         while True:
             current_time = time.time()
             if current_time - old_time > .5:
                 rearview_on = GPIO.input(frontview_camera_pin)
+                logging.warning(f"REARVIEW ON `{rearview_on}`")
                 old_time = current_time
 
-            if cv2.getWindowProperty(window_title, cv2.WND_PROP_AUTOSIZE) >= 0 and rearview_on:
-                frontview_camera_thread.join()
-                rearview_camera_thread.start()
+            if rearview_on:
+                if frontview_camera_thread.is_alive():
+                    frontview_camera_thread.terminate()
+                if not rearview_camera_thread.is_alive():
+                    rearview_camera_thread = multiprocessing.Process(target=spawn_camera_process, args=(), kwargs={"feed": "/dev/video1", "camera_name": "rearview"})
+                    rearview_camera_thread.start()
             else:
                 if rearview_camera_thread.is_alive():
-                    rearview_camera_thread.join()
+                    rearview_camera_thread.terminate()
                 if not frontview_camera_thread.is_alive():
+                    frontview_camera_thread = multiprocessing.Process(target=spawn_camera_process, args=(), kwargs={"feed": gstreamer_pipeline(flip_method=2), "api_pref": cv2.CAP_GSTREAMER, "camera_name": "frontview"})
                     frontview_camera_thread.start()
 
             # todo remove this when installed in car
@@ -106,9 +107,9 @@ def show_camera():
     finally:
         GPIO.cleanup()
         if rearview_camera_thread.is_alive():
-            rearview_camera_thread.join()
+            rearview_camera_thread.terminate()
         if frontview_camera_thread.is_alive():
-            frontview_camera_thread.join()
+            frontview_camera_thread.terminate()
         cv2.destroyAllWindows()
 
 
